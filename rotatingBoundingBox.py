@@ -131,7 +131,7 @@ def process_frame(frame, model, conf_threshold=0.4, focal_length_pixels=1000):
               
               print(f"Object {cls}: Center: {center}, Width: {width_cm:.1f}cm, "
                     f"Height: {height_cm:.1f}cm, Angle: {angle:.1f}, Conf: {conf:.2f}")
-  
+
   return processed_frame
 
 def main():
