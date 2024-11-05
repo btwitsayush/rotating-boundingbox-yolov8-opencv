@@ -136,7 +136,7 @@ def process_frame(frame, model, conf_threshold=0.4, focal_length_pixels=1000):
 
 def main():
   # Load YOLO model
-  model = YOLO('yolo V8m cardboard.pt')  # Make sure to use your correct model path
+  model = YOLO('yolov8s.pt')  # Make sure to use your correct model path
   
   # Initialize webcam
   cap = cv2.VideoCapture(0)
@@ -179,4 +179,5 @@ def main():
   cv2.destroyAllWindows()
 
 if __name__ == "__main__":
+  
   main()
