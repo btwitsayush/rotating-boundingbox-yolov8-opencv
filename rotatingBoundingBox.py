@@ -1,6 +1,8 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
+import os
+from datetime import datetime, timezone
 
 def rescaleFrame(frame, scale=0.75):
   width = int(frame.shape[1] * scale)
@@ -74,52 +76,38 @@ def draw_rotated_bbox(image, rotated_box, color=(0, 255, 0), thickness=2):
   cv2.circle(image, tuple(center), 3, (0, 0, 255), -1)
   return image
 
-def pixel_to_cm(width_pixels, height_pixels, depth_cm=100, focal_length_pixels=1000):
-  """
-  Convert pixel dimensions to centimeters using perspective transformation
-  assuming a known depth and focal length
-  """
+def pixel_to_cm(width_pixels, height_pixels, depth_cm=70, focal_length_pixels=1000):
   width_cm = (width_pixels * depth_cm) / focal_length_pixels
   height_cm = (height_pixels * depth_cm) / focal_length_pixels
   return width_cm, height_cm
 
-def calibrate_focal_length(known_width_cm, width_pixels, depth_cm=100):
-  """
-  Calibrate focal length using an object of known dimensions
-  """
-  focal_length_pixels = (width_pixels * depth_cm) / known_width_cm
-  return focal_length_pixels
-
-def process_frame(frame, model, conf_threshold=0.4, focal_length_pixels=1000):
-  # Perform inference
+def process_frame(frame, model, save_dir, conf_threshold=0.4, focal_length_pixels=1000):
   results = model(frame)
   detections = results[0].boxes
   
   processed_frame = frame.copy()
+  save_frame = False
   
   for box in detections:
       cls = int(box.cls.item())
       conf = float(box.conf.item())
       
       if conf >= conf_threshold:
+          save_frame = True
           xyxy = [float(x) for x in box.xyxy[0]]
           
           rotated_rect, rotated_box = get_accurate_rotated_bbox(frame, xyxy)
           
           if rotated_box is not None:
-              # Draw the rotated bounding box
               processed_frame = draw_rotated_bbox(processed_frame, rotated_box)
               
-              # Get angle and dimensions
               center, (width_pixels, height_pixels), angle = rotated_rect
               
-              # Convert pixel dimensions to cm
               width_cm, height_cm = pixel_to_cm(width_pixels, height_pixels, 
                                               depth_cm=100, 
                                               focal_length_pixels=focal_length_pixels)
               
-              # Add text annotations
-              text = f"Class: {cls}, Conf: {conf:.2f}"
+              text = f"Class: {cls}, Conf: {conf*100:.1f}%"
               dimensions_text = f"W: {width_cm:.1f}cm, H: {height_cm:.1f}cm"
               
               cv2.putText(processed_frame, text, 
@@ -130,33 +118,23 @@ def process_frame(frame, model, conf_threshold=0.4, focal_length_pixels=1000):
                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
               
               print(f"Object {cls}: Center: {center}, Width: {width_cm:.1f}cm, "
-                    f"Height: {height_cm:.1f}cm, Angle: {angle:.1f}, Conf: {conf:.2f}")
+                    f"Height: {height_cm:.1f}cm, Angle: {angle:.1f}, Conf: {conf*100:.1f}%")
+  
+  if save_frame:
+      utc_timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_UTC")
+      filename = f"detection_{utc_timestamp}_conf_{conf*100:.1f}.jpg"
+      save_path = os.path.join(save_dir, filename)
+      cv2.imwrite(save_path, processed_frame)
+      print(f"Saved frame to: {save_path}")
 
   return processed_frame
 
 def main():
-  # Load YOLO model
-  model = YOLO('yolov8s.pt')  # Make sure to use your correct model path
+  save_dir = "high_confidence_detections"
+  os.makedirs(save_dir, exist_ok=True)
   
-  # Initialize webcam
+  model = YOLO("C:\\Users\\Admin\\Downloads\\best.pt")
   cap = cv2.VideoCapture(0)
-  
-  # Optional calibration section
-  """
-  # Calibration (uncomment and modify for calibration)
-  ret, frame = cap.read()
-  if ret:
-      results = model(frame)
-      if len(results[0].boxes) > 0:
-          box = results[0].boxes[0]
-          xyxy = [float(x) for x in box.xyxy[0]]
-          rotated_rect, _ = get_accurate_rotated_bbox(frame, xyxy)
-          if rotated_rect:
-              _, (width_pixels, _), _ = rotated_rect
-              focal_length_pixels = calibrate_focal_length(30, width_pixels)  # 30cm reference object
-  """
-  
-  # Using estimated focal length (should be calibrated for accuracy)
   focal_length_pixels = 1000
   
   while True:
@@ -167,7 +145,8 @@ def main():
           
       frame = rescaleFrame(frame, scale=0.75)
       processed_frame = process_frame(frame, model, 
-                                   conf_threshold=0.3, 
+                                   save_dir,
+                                   conf_threshold=0.4,
                                    focal_length_pixels=focal_length_pixels)
       
       cv2.imshow('Object Detection with Measurements', processed_frame)
@@ -179,5 +158,4 @@ def main():
   cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-  
   main()
